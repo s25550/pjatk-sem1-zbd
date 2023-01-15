@@ -1,0 +1,116 @@
+-- 1
+
+select pname, ename
+from emp, proj, proj_emp
+where emp.empno=proj_emp.empno
+and proj.projno=proj_emp.projno
+and extract(year from proj.start_date) = '2016'
+;
+
+-- 2
+
+select extract (month from proj.start_date) "month", count(*) "proj_count"
+from proj
+where extract (year from proj.start_date) = '2016'
+group by extract (month from proj.start_date)
+;
+
+-- 3
+
+select grade, count(*)
+from emp, salgrade
+where emp.sal between salgrade.losal and salgrade.hisal
+group by salgrade.grade
+having count(*) > 2
+;
+
+-- 4
+
+select ename
+from emp, proj_emp
+where emp.empno=proj_emp.empno
+and projno in (
+    select projno
+    from proj_emp, emp
+    where emp.empno=proj_emp.empno
+    and ename = 'KING'
+)
+;
+
+-- 5
+
+select pname, budget, count(*)
+from proj, proj_emp
+where proj.projno = proj_emp.projno
+group by pname, budget
+having count(*) = (
+    select max(count(empno))
+    from proj_emp
+    group by projno
+)
+;
+
+-- 6
+
+select dname, loc, sum(sal)
+from dept, emp
+where dept.deptno = emp.deptno
+group by dname, loc
+having sum(sal) = (
+	select max(sum(sal))
+	from emp
+	group by deptno
+)
+;
+
+-- 7
+
+select ename
+from emp
+where not exists (
+	select 1
+	from proj_emp
+	where empno = emp.empno
+)
+;
+
+-- 8
+
+select p.pname, pe.projno, e.ename, e.sal from emp e, proj_emp pe, proj p
+where p.projno = pe.projno
+and e.empno = pe.empno
+and sal = (
+	select max(sal)
+	from emp, proj_emp, proj
+	where proj.projno = proj_emp.projno
+	and emp.empno = proj_emp.empno
+	and proj.projno = p.projno
+)
+;
+
+-- 9
+
+select extract(year from p.end_date) year, extract(month from p.end_date) month, count(*) proj_count
+from proj p
+group by extract(year from p.end_date), extract(month from p.end_date)
+having count(*) = (
+	select max(count(*))
+	from proj
+	where extract(year from p.end_date) = extract(year from proj.end_date)
+	group by extract(month from end_date)
+)
+;
+
+-- 10
+
+select e.deptno, e.ename, count(pe.empno) empproj
+from emp e, proj_emp pe
+where e.empno = pe.empno
+group by e.ename, e.deptno
+having count(pe.empno) = (
+	select max(count(proj_emp.empno))
+	from emp, proj_emp
+	where emp.deptno = e.deptno and emp.empno = proj_emp.empno
+	group by emp.ename
+)
+;
