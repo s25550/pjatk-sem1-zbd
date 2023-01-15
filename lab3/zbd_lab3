@@ -1,0 +1,262 @@
+-- 1
+create view Prac (nr, nazwisko, stanowisko, placa, premia, data_zatr, nr_oddz, oddz, lok)
+as
+	select empno, ename, job, sal, comm, hiredate, emp.deptno, dname, loc
+	from emp, dept
+	where emp.deptno = dept.deptno
+	and loc = 'NEW YORK'
+;
+
+select nr, nazwisko, placa * 12 + nvl(premia, 0) * 12
+from prac
+;
+
+update prac
+set placa = placa * 1.2
+;
+select nr, nazwisko, placa * 12 + nvl(premia,0)*12
+from prac
+;
+rollback;
+
+insert into prac (nr, nazwisko, stanowisko, placa, premia, data_zatr, nr_oddz)
+values (7899, 'KOWALSKI', 'CLERK', 2250, null, sysdate, 10)
+;
+rollback;
+
+-- 2
+
+create view Prac3000 (nr, nazwisko, stanowisko, placa)
+as
+	select empno, ename, job, sal
+from emp
+where sal < 3000
+with check option
+;
+
+update Prac3000
+set placa = placa + 1000
+;
+update Prac3000
+set placa = placa + 10
+;
+update Prac3000 set placa = placa + 100
+where placa < 2900
+;
+rollback;
+
+-- 3
+
+create view PracMgr (nr, nazwisko, stanowisko, placa)
+as
+	select empno, ename, job, sal
+	from emp
+	where job = 'MANAGER'
+	with read only
+;
+
+-- 4
+
+create view Pracownicy (nazwisko, stanowisko, placa, premia, data_zatr, nr_oddz, oddz, lok)
+as
+	select ename, job, sal, comm, hiredate, emp.deptno, dname, loc
+	from emp, dept
+	where emp.deptno = dept.deptno
+;
+
+create or replace TRIGGER Pracownicy_insert
+INSTEAD OF INSERT ON Pracownicy -- będzie uruchamiana jeśli użytkownik wykona insert na perspektywie 
+---a nie na tabelach zródlowych
+FOR EACH ROW
+DECLARE
+  p NUMBER; -- zmienna pomocnicza do przechowywania ilosci dzialow o numerze, 
+  --           takim jak dzial który wlasnie chcemy dodać, potem analogicznie ilosci pracowników
+  Lp NUMBER;
+BEGIN 
+-- sprawdzamy wcześniejsze istnienie dodawanego walśnie dzialu
+  SELECT Count(*) INTO p FROM Dept 
+  WHERE Dept.Deptno = :NEW.nr_oddz;  --:NEW.nr_oddz - numer dzialu, który wlasnie chcemy dodoać
+  IF p=0 THEN  -- nie ma dzialow o tym numerze - trzeba dodać 
+       INSERT INTO Dept VALUES(:NEW.nr_oddz, :NEW.oddz, :NEW.lok);
+  END IF;
+  -- w tym zadaniu, jesli dzial wczesniej istnial - nie poprawiamy mu nazwy i lokalizacji na nowe wartości;
+  -- jeśli tego chcemy można w ELSE dodać instrukcję UPDATE
+  --
+  --sprawdzamy wcześniejsze istnienie pracownika
+  SELECT Count(*) INTO p FROM Emp
+  WHERE Emp.ename = :NEW.nazwisko;
+  IF p=0 THEN --nie ma pracownikow o takim nazwisku - trzeba dodać
+    Select NVL(max(empno)+1,1) into Lp from emp; --generujemy nowy numer dla pracownika o jeden wiekszy niż wykorzystywane dotychczas
+    --jeśli w tabeli emp nie ma rekordów funkcja max zwraca wartość null, a funkcja NVL zamienia to na 1
+    INSERT INTO Emp VALUES(Lp, :NEW.Nazwisko , :NEW.stanowisko, null, :NEW.data_zatr,:NEW.placa, :NEW.premia,:NEW.nr_oddz);
+  ELSE --pracownik o zadanym nazwisku już istnial - trzeba zmienić jego dane na nowe
+    UPDATE Emp SET JOB =:NEW.stanowisko, HIREDATE=:NEW.data_zatr, SAL=:NEW.placa, COMM =:NEW.premia,  deptno=:NEW.nr_oddz
+    WHERE Emp.Ename = :NEW.nazwisko;
+  END IF;
+end;
+
+insert into Pracownicy
+ (nazwisko, stanowisko, placa, premia, data_zatr, nr_oddz, oddz, lok) 
+ values('Kowalski','CLERK',3333,3333,sysdate,50, 'PJWSTK','W-wa');
+
+select * from Pracownicy;
+select * from EMP;
+select * from DEPT;
+
+insert into Pracownicy
+(nazwisko, stanowisko, placa, premia, data_zatr, nr_oddz, oddz, lok) values('Kowalski','CLERK',4444,3333,sysdate,50, 'PJWSTK','W-wa');
+
+insert into Pracownicy
+(nazwisko, stanowisko, placa, premia, data_zatr, nr_oddz, oddz, lok) 
+ values('Nowak','CLERK',3333,3333,sysdate,50,'PJWSTK','W-wa'); 
+ Rollback;
+
+-- 5
+
+insert into Pracownicy (nazwisko, stanowisko, placa, premia, data_zatr, nr_oddz, oddz, lok)
+values ('ROSLANIEC', 'CLERK', 4000, 0, sysdate, 50, 'PJWSTK', 'W-wa')
+;
+update Pracownicy
+set placa = placa + 50
+where nazwisko = 'ROSLANIEC'
+;
+
+-- zadanie
+
+-- 6
+
+create view PracownicyDzialy (nazwisko, stanowisko, placa, premia, data_zatr, oddz, lok)
+as
+	select ename, job, sal, comm, hiredate, dname, loc
+	from emp, dept
+	where emp.deptno = dept.deptno
+;
+
+create or replace trigger PracownicyDzialy_insert
+instead of insert on pracownicydzialy
+for each row
+declare
+c number;
+c_dept number;
+c_emp number;
+begin
+    select count(*) into c
+    from dept
+    where :NEW.oddz = dept.dname;
+    if c = 0 then
+        select NVL(max(deptno) + 10, 10) into c_dept
+        from dept;
+        insert into dept
+        values (c_dept, :NEW.oddz, :NEW.lok);
+    else
+        update dept
+        set loc=:NEW.lok
+        where dname = :NEW.oddz;
+        select deptno into c_dept
+        from dept
+        where dname = :NEW.oddz;
+    end if;
+    select count(*) into c
+    from emp
+    where :NEW.nazwisko = emp.ename;
+    if c = 0 then
+        select NVL(max(empno) + 1, 1)
+        into c_emp
+        from emp;
+        insert into emp
+        values (c_emp, :NEW.nazwisko, :NEW.stanowisko, null, :NEW.data_zatr, :NEW.placa, :NEW.premia, c_dept);
+    else
+        update emp
+        set
+            job = :NEW.stanowisko,
+            hiredate = :NEW.data_zatr,
+            sal = :NEW.placa,
+            comm = :NEW.premia,
+            deptno = c_dept
+        where ename = :NEW.nazwisko;
+    end if;
+end
+;
+
+-- aktualizacja istniejacego pracownika, aktualizacja istniejacego dzialu
+insert into PracownicyDzialy
+values ('ROSLANIEC', 'CLERK', 4500, 100, sysdate, 'PJWSTK', 'WARSZAWA')
+;
+
+-- aktualizacja istniejacego pracownika, dodanie nowego dzialu
+insert into PracownicyDzialy
+values ('ROSLANIEC', 'CLERK', 5500, 0, sysdate, 'COSTAM', 'KRAKOW')
+;
+
+-- dodanie nowego pracownika, aktualizacja istniejacego dzialu
+insert into PracownicyDzialy
+values ('KOWALSKI', 'CLERK', 6500, 100, sysdate, 'PJWSTK', 'GDANSK')
+;
+
+-- dodanie nowego pracownika, dodanie nowego dzialu
+insert into PracownicyDzialy
+values ('NOWAK', 'CLERK', 3500, 200, sysdate, 'DRUGIECOSTAM', 'WROCLAW')
+;
+
+rollback;
+
+-- 7
+
+create view PracProj (nazwisko, stanowisko, placa, data_zatr, nr_dzialu, nazwa_proj, budzet, data_startu)
+as
+    select ename, job, sal, hiredate, deptno, pname, budget, start_date
+    from emp, proj, proj_emp
+    where proj_emp.empno = emp.empno
+    and proj_emp.projno = proj.projno
+;
+
+create or replace trigger PracProj_insert
+instead of insert on PracProj
+for each row
+declare
+c number;
+c_proj number;
+c_emp number;
+begin
+    select count(*) into c
+    from proj where :NEW.nazwa_proj = proj.pname;
+    if c = 0 then
+        select NVL(max(projno) + 1, 1) into c_proj
+        from proj;
+        insert into proj
+        values (c_proj, :NEW.nazwa_proj, :NEW.budzet, :NEW.data_startu, null);
+    else
+        update proj
+        set
+            budget = :NEW.budzet,
+            start_date = :NEW.data_startu,
+            end_date = null
+        where proj.pname = :NEW.nazwa_proj;
+    end if;
+    select count(*) into c
+    from emp where :NEW.nazwisko = emp.ename;
+    if c = 0 then
+        select NVL(max(empno) + 1, 1) into c_emp
+        from emp;
+        insert into emp
+        values (c_emp, :NEW.nazwisko, :NEW.stanowisko, null, :NEW.data_zatr, :NEW.placa, null, :NEW.nr_dzialu);
+    else
+        update emp
+        set
+            ename = :NEW.nazwisko,
+            job = :NEW.stanowisko,
+            sal = :NEW.placa,
+            hiredate = :NEW.data_zatr,
+            emp.deptno = :NEW.nr_dzialu
+        where ename = :NEW.nazwisko;
+    end if;
+end
+;
+
+insert into PracProj
+values ('NOWAKOWSKI', 'STUDENT', 9000, sysdate, 40, 'PROJECT6', 90000, sysdate)
+;
+
+insert into PracProj
+values ('FABIANSKI', 'STUDENT', 15000, sysdate, 50, 'PROJECT7', 120000, sysdate)
+;
